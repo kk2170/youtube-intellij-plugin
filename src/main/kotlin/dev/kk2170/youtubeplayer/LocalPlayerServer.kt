@@ -99,12 +99,18 @@ class LocalPlayerServer : Disposable {
                 #fallback a {
                   color: #8ab4f8;
                 }
+
+                #countdown {
+                  opacity: 0.8;
+                  font-size: 12px;
+                }
               </style>
             </head>
             <body>
               <div id="player"></div>
               <div id="fallback">
                 <div id="message">プレイヤーを読み込めませんでした。</div>
+                <div id="countdown"></div>
                 <a href="${htmlEscape(safeBrowserUrl)}" target="_blank" rel="noopener noreferrer">ブラウザで開く</a>
               </div>
               <script>
@@ -119,10 +125,26 @@ class LocalPlayerServer : Disposable {
 
                 const fallback = document.getElementById('fallback');
                 const message = document.getElementById('message');
+                const countdown = document.getElementById('countdown');
+                let redirectTimer = null;
+                let readyTimer = null;
 
-                function showFallback(text) {
+                function showFallback(text, redirectToWatchPage) {
                   message.textContent = text;
                   fallback.style.display = 'flex';
+
+                  if (redirectToWatchPage) {
+                    let secondsLeft = 1;
+                    countdown.textContent = '通常の YouTube ページへ切り替えます...';
+
+                    if (redirectTimer) {
+                      window.clearTimeout(redirectTimer);
+                    }
+
+                    redirectTimer = window.setTimeout(() => {
+                      window.location.replace(target.browserUrl);
+                    }, secondsLeft * 1000);
+                  }
                 }
 
                 var tag = document.createElement('script');
@@ -167,9 +189,17 @@ class LocalPlayerServer : Disposable {
                   }
 
                   player = new YT.Player('player', options);
+
+                  readyTimer = window.setTimeout(() => {
+                    showFallback('埋め込みプレイヤーの初期化に時間がかかっています。通常表示へ切り替えます。', true);
+                  }, 5000);
                 }
 
                 function onPlayerReady(event) {
+                  if (readyTimer) {
+                    window.clearTimeout(readyTimer);
+                  }
+
                   event.target.playVideo();
 
                   if (target.listId && target.videoId && target.index === null) {
@@ -202,18 +232,22 @@ class LocalPlayerServer : Disposable {
                 }
 
                 function onPlayerError(event) {
+                  if (readyTimer) {
+                    window.clearTimeout(readyTimer);
+                  }
+
                   const code = event.data;
                   if (code === 153) {
-                    showFallback('YouTube が Referer / API client identification を要求しています。ブラウザで開いてください。');
+                    showFallback('YouTube が埋め込みを拒否したため、通常表示へ切り替えます。', true);
                     return;
                   }
 
                   if (code === 101 || code === 150) {
-                    showFallback('この動画は埋め込み再生を許可していません。ブラウザで開いてください。');
+                    showFallback('この動画は埋め込み再生を許可していません。通常表示へ切り替えます。', true);
                     return;
                   }
 
-                  showFallback('プレイヤーエラーが発生しました (code: ' + code + ')。ブラウザで開いてください。');
+                  showFallback('プレイヤーエラーが発生しました (code: ' + code + ')。通常表示へ切り替えます。', true);
                 }
               </script>
             </body>
