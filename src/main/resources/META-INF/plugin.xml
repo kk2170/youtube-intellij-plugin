@@ -1,0 +1,19 @@
+<idea-plugin>
+    <id>dev.kk2170.youtubeplayer</id>
+    <name>YouTube Player</name>
+    <vendor email="noreply@example.com">kk2170</vendor>
+
+    <description><![CDATA[
+        Minimal IntelliJ Platform plugin that opens a tool window with an embedded YouTube player.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="YouTube"
+                anchor="right"
+                icon="/icons/youtubeToolWindow.svg"
+                factoryClass="dev.kk2170.youtubeplayer.YouTubeToolWindowFactory"/>
+    </extensions>
+</idea-plugin>
