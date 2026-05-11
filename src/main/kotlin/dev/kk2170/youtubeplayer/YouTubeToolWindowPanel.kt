@@ -101,52 +101,9 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
 
         statusLabel.text = "読み込み中..."
         
-        // YouTube IFrame Player API を使用して再生する
-        // これにより、ローカルファイル由来の制限（Error 153）を回避しやすくなる
-        val html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-                    #player { width: 100%; height: 100%; }
-                </style>
-            </head>
-            <body>
-                <div id="player"></div>
-                <script>
-                    var tag = document.createElement('script');
-                    tag.src = "https://www.youtube.com/iframe_api";
-                    var firstScriptTag = document.getElementsByTagName('script')[0];
-                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-                    var player;
-                    function onYouTubeIframeAPIReady() {
-                        player = new YT.Player('player', {
-                            height: '100%',
-                            width: '100%',
-                            videoId: '$videoId',
-                            playerVars: {
-                                'autoplay': 1,
-                                'hl': 'ja',
-                                'rel': 0,
-                                'controls': 1
-                            },
-                            events: {
-                                'onReady': onPlayerReady
-                            }
-                        });
-                    }
-                    function onPlayerReady(event) {
-                        event.target.playVideo();
-                    }
-                </script>
-            </body>
-            </html>
-        """.trimIndent()
-        
-        browser?.loadHTML(html, "https://www.youtube.com")
+        // 埋め込みプレイヤー（iframe）では Error 153 が発生しやすいため、
+        // 通常の YouTube 視聴ページ（watch）を直接表示して再生を安定させます。
+        browser?.loadURL(YouTubeUrls.buildWatchUrl(videoId))
 
         searchField.text = YouTubeUrls.buildWatchUrl(videoId)
         statusLabel.text = "再生中: $videoId"
