@@ -1,5 +1,6 @@
 package dev.kk2170.youtubeplayer
 
+import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Disposer
@@ -9,56 +10,69 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.util.ui.JBUI
+import org.cef.network.CefRequest
 import java.awt.BorderLayout
-import java.awt.FlowLayout
+import javax.swing.BorderFactory
 import javax.swing.JButton
-import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
 class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
-    private val videoField = JBTextField(YouTubeUrls.DEFAULT_VIDEO_URL, 40)
-    private val statusLabel = JBLabel("YouTube URL または動画 ID を入力して Load を押してください。")
+    private val searchField = JBTextField()
+    private val statusLabel = JBLabel()
     private var browser: JBCefBrowser? = null
 
     init {
-        border = JBUI.Borders.empty(8)
-
         if (!JBCefApp.isSupported()) {
             add(createUnsupportedPanel(), BorderLayout.CENTER)
         } else {
-            val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0)).apply {
-                add(JLabel("YouTube URL / 動画 ID:"))
-                add(videoField)
-
-                val loadButton = JButton("読み込み")
-                loadButton.addActionListener { loadVideo() }
-                add(loadButton)
-
-                val openButton = JButton("ブラウザで開く")
-                openButton.addActionListener {
-                    val videoId = YouTubeUrls.extractVideoId(videoField.text)
-                    if (videoId == null) {
-                        statusLabel.text = "有効な YouTube 動画 ID が検出されませんでした。"
-                        return@addActionListener
-                    }
-
-                    BrowserUtil.browse(YouTubeUrls.buildWatchUrl(videoId))
-                }
-                add(openButton)
-            }
-
+            val toolbar = createToolbar()
             add(toolbar, BorderLayout.NORTH)
 
             browser = JBCefBrowser().also {
                 Disposer.register(this, it)
+                // ブラウザの境界線を消し、IDEの背景色に合わせる
+                it.component.border = BorderFactory.createEmptyBorder()
                 add(it.component, BorderLayout.CENTER)
             }
 
-            add(statusLabel, BorderLayout.SOUTH)
+            val statusPanel = JPanel(BorderLayout()).apply {
+                border = JBUI.Borders.empty(4, 8)
+                add(statusLabel, BorderLayout.SOUTH)
+            }
+            add(statusPanel, BorderLayout.SOUTH)
 
-            videoField.addActionListener { loadVideo() }
+            searchField.addActionListener { loadVideo() }
+
             loadVideo(YouTubeUrls.DEFAULT_VIDEO_URL)
+        }
+    }
+
+    private fun createToolbar(): JPanel {
+        val loadButton = JButton("読み込み", AllIcons.Actions.Execute).apply {
+            addActionListener { loadVideo() }
+        }
+
+        val openButton = JButton("ブラウザで開く", AllIcons.Ide.External_link_arrow).apply {
+            addActionListener {
+                val videoId = YouTubeUrls.extractVideoId(searchField.text)
+                if (videoId == null) {
+                    statusLabel.text = "有効な YouTube 動画 ID が検出されませんでした。"
+                    return@addActionListener
+                }
+                BrowserUtil.browse(YouTubeUrls.buildWatchUrl(videoId))
+            }
+        }
+
+        return JPanel(BorderLayout(8, 0)).apply {
+            border = JBUI.Borders.empty(4, 8)
+            add(searchField, BorderLayout.CENTER)
+            
+            val buttonPanel = JPanel(BorderLayout(4, 0)).apply {
+                add(loadButton, BorderLayout.WEST)
+                add(openButton, BorderLayout.EAST)
+            }
+            add(buttonPanel, BorderLayout.EAST)
         }
     }
 
@@ -79,18 +93,23 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
         }
     }
 
-    private fun loadVideo(input: String = videoField.text) {
+    private fun loadVideo(input: String = searchField.text) {
         val videoId = YouTubeUrls.extractVideoId(input)
         if (videoId == null) {
             statusLabel.text = "有効な YouTube 動画 ID が検出されませんでした。"
             return
         }
 
-        // Load the full watch page to ensure playback works.
-        // Direct embed URLs often fail with Error 153 in JCEF due to missing Referer headers.
-        browser?.loadURL(YouTubeUrls.buildWatchUrl(videoId))
+        statusLabel.text = "読み込み中..."
         
-        videoField.text = YouTubeUrls.buildWatchUrl(videoId)
-        statusLabel.text = "動画を読み込みました: $videoId"
+        // Embed URL を Referer ヘッダー付きで読み込むことで、再生部分のみを表示しエラー 153 を回避
+        val embedUrl = YouTubeUrls.buildEmbedUrl(videoId)
+        val request = CefRequest.create()
+        request.url = embedUrl
+        request.setReferrer("https://www.youtube.com", org.cef.network.CefRequest.ReferrerPolicy.REFERRER_POLICY_DEFAULT)
+        browser?.cefBrowser?.loadRequest(request)
+
+        searchField.text = YouTubeUrls.buildWatchUrl(videoId)
+        statusLabel.text = "再生中: $videoId"
     }
 }
