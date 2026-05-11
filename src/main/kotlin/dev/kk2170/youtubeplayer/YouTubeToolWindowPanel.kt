@@ -101,8 +101,8 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
 
         statusLabel.text = "読み込み中..."
         
-        // HTMLラッパー経由でiframe埋め込みを行うことで、UIを消しつつ再生を安定させる
-        val embedUrl = "https://www.youtube.com/embed/$videoId?autoplay=1&hl=ja&rel=0"
+        // YouTube IFrame Player API を使用して再生する
+        // これにより、ローカルファイル由来の制限（Error 153）を回避しやすくなる
         val html = """
             <!DOCTYPE html>
             <html>
@@ -110,18 +110,43 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
                 <meta charset="UTF-8">
                 <style>
                     body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-                    iframe { width: 100%; height: 100%; border: none; }
+                    #player { width: 100%; height: 100%; }
                 </style>
             </head>
             <body>
-                <iframe src="$embedUrl" 
-                        allow="autoplay; encrypted-media; picture-in-picture" 
-                        allowfullscreen></iframe>
+                <div id="player"></div>
+                <script>
+                    var tag = document.createElement('script');
+                    tag.src = "https://www.youtube.com/iframe_api";
+                    var firstScriptTag = document.getElementsByTagName('script')[0];
+                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+                    var player;
+                    function onYouTubeIframeAPIReady() {
+                        player = new YT.Player('player', {
+                            height: '100%',
+                            width: '100%',
+                            videoId: '$videoId',
+                            playerVars: {
+                                'autoplay': 1,
+                                'hl': 'ja',
+                                'rel': 0,
+                                'controls': 1
+                            },
+                            events: {
+                                'onReady': onPlayerReady
+                            }
+                        });
+                    }
+                    function onPlayerReady(event) {
+                        event.target.playVideo();
+                    }
+                </script>
             </body>
             </html>
         """.trimIndent()
         
-        browser?.loadHTML(html)
+        browser?.loadHTML(html, "https://www.youtube.com")
 
         searchField.text = YouTubeUrls.buildWatchUrl(videoId)
         statusLabel.text = "再生中: $videoId"
