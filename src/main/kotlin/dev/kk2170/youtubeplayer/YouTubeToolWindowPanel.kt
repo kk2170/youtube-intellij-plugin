@@ -3,7 +3,10 @@ package dev.kk2170.youtubeplayer
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.ToolWindow
+import com.intellij.openapi.wm.ToolWindowType
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
@@ -11,15 +14,21 @@ import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
+import java.awt.Dimension
+import java.awt.Toolkit
 import javax.swing.BorderFactory
 import javax.swing.JButton
 import javax.swing.JPanel
 import javax.swing.SwingConstants
 
-class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
+class YouTubeToolWindowPanel(
+    private val project: Project,
+    private val toolWindow: ToolWindow
+) : JPanel(BorderLayout()), Disposable {
     private val searchField = JBTextField()
     private val statusLabel = JBLabel()
     private var browser: JBCefBrowser? = null
+    private var isMaximized = false
 
     init {
         if (!JBCefApp.isSupported()) {
@@ -63,15 +72,41 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
             }
         }
 
+        // 最大化/元に戻すボタン
+        val maximizeButton = JButton("最大化").apply {
+            addActionListener { toggleMaximize() }
+        }
+
         return JPanel(BorderLayout(8, 0)).apply {
             border = JBUI.Borders.empty(4, 8)
             add(searchField, BorderLayout.CENTER)
             
             val buttonPanel = JPanel(BorderLayout(4, 0)).apply {
                 add(loadButton, BorderLayout.WEST)
+                add(maximizeButton, BorderLayout.CENTER)
                 add(openButton, BorderLayout.EAST)
             }
             add(buttonPanel, BorderLayout.EAST)
+        }
+    }
+
+    private fun toggleMaximize() {
+        if (isMaximized) {
+            // 元に戻す (Docked)
+            toolWindow.setType(ToolWindowType.DOCKED, null)
+            isMaximized = false
+        } else {
+            // 最大化 (Floating + 画面サイズ)
+            toolWindow.setType(ToolWindowType.FLOATING, null)
+            
+            // フレームを取得してサイズ変更
+            val frame = toolWindow.component.parent
+            if (frame != null) {
+                val screenSize = Toolkit.getDefaultToolkit().screenSize
+                frame.setSize(screenSize)
+                frame.setLocation(0, 0)
+            }
+            isMaximized = true
         }
     }
 
@@ -101,11 +136,12 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
 
         statusLabel.text = "読み込み中..."
         
-        // 埋め込みプレイヤー（iframe）では Error 153 が発生しやすいため、
         // 通常の YouTube 視聴ページ（watch）を直接表示して再生を安定させます。
-        browser?.loadURL(YouTubeUrls.buildWatchUrl(videoId))
+        // 自動再生を有効にするため autoplay=1 を追加
+        val url = YouTubeUrls.buildWatchUrl(videoId) + "&autoplay=1"
+        browser?.loadURL(url)
 
-        searchField.text = YouTubeUrls.buildWatchUrl(videoId)
+        searchField.text = url
         statusLabel.text = "再生中: $videoId"
     }
 }

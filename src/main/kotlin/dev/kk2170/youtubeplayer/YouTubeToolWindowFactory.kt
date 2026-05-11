@@ -8,7 +8,7 @@ import com.intellij.ui.content.ContentFactory
 
 class YouTubeToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = YouTubeToolWindowPanel()
+        val panel = YouTubeToolWindowPanel(project, toolWindow)
         val content = ContentFactory.getInstance().createContent(panel, "", false)
         content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
