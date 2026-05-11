@@ -3,7 +3,6 @@ package dev.kk2170.youtubeplayer
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowType
@@ -14,7 +13,6 @@ import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
-import java.awt.Dimension
 import java.awt.Toolkit
 import javax.swing.BorderFactory
 import javax.swing.JButton
@@ -22,18 +20,22 @@ import javax.swing.JPanel
 import javax.swing.SwingConstants
 
 class YouTubeToolWindowPanel(
-    private val project: Project,
     private val toolWindow: ToolWindow
 ) : JPanel(BorderLayout()), Disposable {
     private val searchField = JBTextField()
     private val statusLabel = JBLabel()
     private var browser: JBCefBrowser? = null
     private var isMaximized = false
+    private var playerServer: LocalPlayerServer? = null
 
     init {
+        searchField.text = YouTubeUrls.DEFAULT_VIDEO_URL
+
         if (!JBCefApp.isSupported()) {
             add(createUnsupportedPanel(), BorderLayout.CENTER)
         } else {
+            playerServer = LocalPlayerServer().also { Disposer.register(this, it) }
+
             val toolbar = createToolbar()
             add(toolbar, BorderLayout.NORTH)
 
@@ -63,12 +65,12 @@ class YouTubeToolWindowPanel(
 
         val openButton = JButton("ブラウザで開く", AllIcons.Ide.External_link_arrow).apply {
             addActionListener {
-                val videoId = YouTubeUrls.extractVideoId(searchField.text)
-                if (videoId == null) {
-                    statusLabel.text = "有効な YouTube 動画 ID が検出されませんでした。"
+                val target = YouTubeUrls.parseTarget(searchField.text)
+                if (target == null) {
+                    statusLabel.text = "有効な YouTube URL / 動画 ID / Playlist URL を入力してください。"
                     return@addActionListener
                 }
-                BrowserUtil.browse(YouTubeUrls.buildWatchUrl(videoId))
+                BrowserUtil.browse(target.browserUrl)
             }
         }
 
@@ -128,20 +130,22 @@ class YouTubeToolWindowPanel(
     }
 
     private fun loadVideo(input: String = searchField.text) {
-        val videoId = YouTubeUrls.extractVideoId(input)
-        if (videoId == null) {
-            statusLabel.text = "有効な YouTube 動画 ID が検出されませんでした。"
+        val target = YouTubeUrls.parseTarget(input)
+        if (target == null) {
+            statusLabel.text = "有効な YouTube URL / 動画 ID / Playlist URL を入力してください。"
             return
         }
 
         statusLabel.text = "読み込み中..."
-        
-        // 通常の YouTube 視聴ページ（watch）を直接表示して再生を安定させます。
-        // 自動再生を有効にするため autoplay=1 を追加
-        val url = YouTubeUrls.buildWatchUrl(videoId) + "&autoplay=1"
-        browser?.loadURL(url)
 
-        searchField.text = url
-        statusLabel.text = "再生中: $videoId"
+        val playerUrl = playerServer?.playerUrlFor(target) ?: target.browserUrl
+        browser?.loadURL(playerUrl)
+
+        searchField.text = target.browserUrl
+        statusLabel.text = when {
+            target.listId != null -> "再生中: Playlist ${target.listId}"
+            target.videoId != null -> "再生中: ${target.videoId}"
+            else -> "再生中"
+        }
     }
 }
