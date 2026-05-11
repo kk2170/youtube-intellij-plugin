@@ -10,7 +10,6 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.util.ui.JBUI
-import org.cef.network.CefRequest
 import java.awt.BorderLayout
 import javax.swing.BorderFactory
 import javax.swing.JButton
@@ -102,12 +101,27 @@ class YouTubeToolWindowPanel : JPanel(BorderLayout()), Disposable {
 
         statusLabel.text = "読み込み中..."
         
-        // Embed URL を Referer ヘッダー付きで読み込むことで、再生部分のみを表示しエラー 153 を回避
-        val embedUrl = YouTubeUrls.buildEmbedUrl(videoId)
-        val request = CefRequest.create()
-        request.url = embedUrl
-        request.setReferrer("https://www.youtube.com", org.cef.network.CefRequest.ReferrerPolicy.REFERRER_POLICY_DEFAULT)
-        browser?.cefBrowser?.loadRequest(request)
+        // HTMLラッパー経由でiframe埋め込みを行うことで、UIを消しつつ再生を安定させる
+        val embedUrl = "https://www.youtube.com/embed/$videoId?autoplay=1&hl=ja&rel=0"
+        val html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+                    iframe { width: 100%; height: 100%; border: none; }
+                </style>
+            </head>
+            <body>
+                <iframe src="$embedUrl" 
+                        allow="autoplay; encrypted-media; picture-in-picture" 
+                        allowfullscreen></iframe>
+            </body>
+            </html>
+        """.trimIndent()
+        
+        browser?.loadHTML(html)
 
         searchField.text = YouTubeUrls.buildWatchUrl(videoId)
         statusLabel.text = "再生中: $videoId"
